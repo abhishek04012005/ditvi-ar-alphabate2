@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Alphabets A-Z</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- AR.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/ar.js@3.4.5/aframe/aframe-ar.js"></script>
+    <!-- A-Frame library -->
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+</head>
+<body>
+    <div id="ar-container">
+        <a-scene 
+            embedded 
+            arjs="sourceType: webcam; 
+                   detectionMode: mono; 
+                   matrixCodeType: 3x3;
+                   debugUIEnabled: false;">
+            
+            <!-- Camera -->
+            <a-camera position="0 0 0"></a-camera>
+            
+            <!-- Markers for each alphabet A-Z -->
+            <!-- These will be dynamically loaded from markers folder -->
+            <!-- Using Hiro marker as example for marker-based detection -->
+            <a-marker id="markerA" type="pattern" url="./assets/markers/ar-marker-1770559668997.patt">
+                <a-entity 
+                    id="modelA"
+                    gltf-model="url(./assets/3dmodels/apple2.0.glb)"
+                    scale="1 1 1"
+                    position="0 0 0"
+                    rotation="0 0 0">
+                </a-entity>
+            </a-marker>
+
+            <a-marker id="markerB" type="pattern" url="assets/markers/pattern-B.patt">
+                <a-entity 
+                    id="modelB"
+                    gltf-model="url(assets/3dmodels/B.gltf)"
+                    scale="1 1 1"
+                    position="0 0 0"
+                    rotation="0 0 0">
+                </a-entity>
+            </a-marker>
+
+            <a-marker id="markerC" type="pattern" url="assets/markers/pattern-C.patt">
+                <a-entity 
+                    id="modelC"
+                    gltf-model="url(assets/3dmodels/C.gltf)"
+                    scale="1 1 1"
+                    position="0 0 0"
+                    rotation="0 0 0">
+                </a-entity>
+            </a-marker>
+
+            <!-- Continue for all alphabets D-Z (similar pattern) -->
+            <!-- For brevity, showing A, B, C as examples -->
+            
+        </a-scene>
+    </div>
+
+    <!-- Controls and Info Panel -->
+    <div id="info-panel">
+        <h1>AR Alphabets A-Z</h1>
+        <p id="current-letter">Detected Letter: None</p>
+        <p id="instructions">Point your camera at the markers to see the 3D alphabet models</p>
+    </div>
+
+    <!-- Marker Information -->
+    <div id="marker-info">
+        <h3>Marker Type: Pattern-Based Markers</h3>
+        <p>Using NFT-compatible pattern markers (.patt files)</p>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

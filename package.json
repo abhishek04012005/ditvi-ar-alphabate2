@@ -1,0 +1,39 @@
+{
+  "name": "ar-alphabets-az",
+  "version": "1.0.0",
+  "description": "Web-based AR application for learning alphabets A-Z using AR.js",
+  "main": "index.html",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "dev": "http-server -p 8000 -c-1",
+    "build": "echo 'Build script to be configured'",
+    "test": "echo 'Test script to be configured'"
+  },
+  "keywords": [
+    "augmented-reality",
+    "ar-js",
+    "a-frame",
+    "3d",
+    "web-ar",
+    "education",
+    "alphabets"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "aframe": "^1.4.2",
+    "ar.js": "^3.4.5"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead",
+    "Chrome >= 78",
+    "Firefox >= 75",
+    "Safari >= 12",
+    "Edge >= 79"
+  ]
+}
