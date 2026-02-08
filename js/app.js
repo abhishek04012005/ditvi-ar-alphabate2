@@ -1,301 +1,254 @@
-// AR Alphabets A-Z - Main Application
-// Uses AR.js with A-Frame for web-based augmented reality
+// AR Alphabets Application - Main JavaScript File
 
-const ALPHABETS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-                    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
-
-// Marker configuration
-const MARKER_CONFIG = {
-    type: 'Pattern-based Markers',
-    format: '.patt files',
-    description: 'Uses NFT (Natural Feature Tracking) compatible pattern markers',
-    detectionMode: 'MONO',
-    matrixCodeType: '3x3'
+// Configuration
+const CONFIG = {
+    markers: {
+        A: { name: 'Apple', url: 'assets/markers/pattern-apple.patt' },
+        B: { name: 'Ball', url: 'assets/markers/pattern-ball.patt' },
+        C: { name: 'Cat', url: 'assets/markers/pattern-cat.patt' },
+        D: { name: 'Dog', url: 'assets/markers/pattern-dog.patt' },
+        E: { name: 'Elephant', url: 'assets/markers/pattern-elephant.patt' },
+        F: { name: 'Fish', url: 'assets/markers/pattern-fish.patt' },
+        G: { name: 'Giraffe', url: 'assets/markers/pattern-giraffe.patt' },
+        H: { name: 'House', url: 'assets/markers/pattern-house.patt' },
+        I: { name: 'Ice Cream', url: 'assets/markers/pattern-ice-cream.patt' },
+        J: { name: 'Jeep', url: 'assets/markers/pattern-jeep.patt' },
+        K: { name: 'Kite', url: 'assets/markers/pattern-kite.patt' },
+        L: { name: 'Lion', url: 'assets/markers/pattern-lion.patt' },
+        M: { name: 'Monkey', url: 'assets/markers/pattern-monkey.patt' },
+        N: { name: 'Nest', url: 'assets/markers/pattern-nest.patt' },
+        O: { name: 'Orange', url: 'assets/markers/pattern-orange.patt' },
+        P: { name: 'Penguin', url: 'assets/markers/pattern-penguin.patt' },
+        Q: { name: 'Quack', url: 'assets/markers/pattern-quack.patt' },
+        R: { name: 'Rose', url: 'assets/markers/pattern-rose.patt' },
+        S: { name: 'Snowman', url: 'assets/markers/pattern-snowman.patt' },
+        T: { name: 'Tiger', url: 'assets/markers/pattern-tiger.patt' },
+        U: { name: 'Umbrella', url: 'assets/markers/pattern-umbrella.patt' },
+        V: { name: 'Violin', url: 'assets/markers/pattern-violin.patt' },
+        W: { name: 'Whale', url: 'assets/markers/pattern-whale.patt' },
+        X: { name: 'Xmas', url: 'assets/markers/pattern-xmas.patt' },
+        Y: { name: 'Yacht', url: 'assets/markers/pattern-yacht.patt' },
+        Z: { name: 'Zebra', url: 'assets/markers/pattern-zebra.patt' }
+    }
 };
 
-let loadingProgress = 0;
-let assetsToLoad = 0;
-let assetsLoaded = 0;
+// State Management
+const STATE = {
+    currentLetter: null,
+    markerDetected: false,
+    audioEnabled: true,
+    gesturesEnabled: true
+};
 
-// Initialize AR Scene
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM Content Loaded - Starting AR initialization...');
-    updateLoadingStatus('Requesting camera access...');
-    
-    initARScene();
-    requestCameraAccess();
-    setupEventListeners();
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('AR Alphabets Application - Initializing...');
+    initializeApplication();
 });
 
-// Request Camera Access
-function requestCameraAccess() {
-    console.log('Requesting camera access...');
-    
-    const constraints = {
-        video: {
-            facingMode: 'environment',
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-        },
-        audio: false
-    };
-    
-    navigator.mediaDevices.getUserMedia(constraints)
-        .then(stream => {
-            console.log('✓ Camera access granted');
-            updateLoadingStatus('Camera ready. Loading assets...');
-            // Stop the stream as AR.js will handle it
-            stream.getTracks().forEach(track => track.stop());
-            updateLoadingProgress(30);
-        })
-        .catch(err => {
-            console.error('✗ Camera access error:', err);
-            showError('Camera Error: ' + err.message + '. Please check permissions and try again.');
-            showErrorOverlay(true);
-        });
+// Application Initialization
+function initializeApplication() {
+    console.log('✓ Application initialized');
+    setupMarkerDetection();
+    setupEventListeners();
+    initializeAudioVisuals();
 }
 
-// Initialize AR.js scene
-function initARScene() {
-    console.log('Initializing AR Scene...');
-    
+// Setup Marker Detection
+function setupMarkerDetection() {
     const scene = document.querySelector('a-scene');
     
     if (!scene) {
-        console.error('AR Scene not found!');
-        showError('AR Scene initialization failed');
-        showErrorOverlay(true);
+        console.error('❌ A-Scene element not found');
         return;
     }
+
+    // Monitor all markers
+    const markers = document.querySelectorAll('a-marker');
     
-    // Wait for scene to be ready
-    scene.addEventListener('loaded', function() {
-        console.log('✓ AR Scene loaded successfully');
-        updateLoadingStatus('Scene loaded. Initializing markers...');
-        updateLoadingProgress(60);
-        createAllMarkers();
+    markers.forEach((marker, index) => {
+        marker.addEventListener('markerFound', () => {
+            const markerId = marker.id;
+            const letter = markerId.replace('-marker', '').toUpperCase();
+            onMarkerFound(letter, marker);
+        });
+
+        marker.addEventListener('markerLost', () => {
+            const markerId = marker.id;
+            const letter = markerId.replace('-marker', '').toUpperCase();
+            onMarkerLost(letter, marker);
+        });
     });
-    
-    // Handle scene errors
-    scene.addEventListener('error', function(e) {
-        console.error('Scene error:', e);
-        showError('Scene Error: ' + e.detail.error);
-    });
+
+    console.log(`✓ Tracking ${markers.length} markers`);
 }
 
-// Create markers for all alphabets A-Z
-function createAllMarkers() {
-    const scene = document.querySelector('a-scene');
+// Handle Marker Found
+function onMarkerFound(letter, marker) {
+    STATE.currentLetter = letter;
+    STATE.markerDetected = true;
+
+    console.log(`📍 Marker Found: ${letter} - ${CONFIG.markers[letter].name}`);
+
+    // Update UI
+    updateLetterDisplay(letter);
     
-    console.log('Creating markers for all alphabets...');
-    updateLoadingStatus('Setting up marker detection...');
-    
-    ALPHABETS.forEach((letter, index) => {
-        // Check if marker already exists
-        const existingMarker = document.getElementById(`marker${letter}`);
-        if (existingMarker) {
-            console.log(`Marker ${letter} already exists`);
-            return;
+    // Play sound if enabled
+    if (STATE.audioEnabled) {
+        const sound = marker.querySelector('a-sound');
+        if (sound && sound.components.sound) {
+            sound.components.sound.playSound();
         }
-        
-        // Create marker element
-        const marker = document.createElement('a-marker');
-        marker.id = `marker${letter}`;
-        marker.setAttribute('type', 'pattern');
-        marker.setAttribute('url', `assets/markers/pattern-${letter}.patt`);
-        marker.setAttribute('emitevents', 'true');
-        
-        // Create model entity
-        const entity = document.createElement('a-entity');
-        entity.id = `model${letter}`;
-        entity.setAttribute('gltf-model', `url(assets/3dmodels/${letter}.glb)`);
-        entity.setAttribute('scale', '0.5 0.5 0.5');
-        entity.setAttribute('position', '0 0 0');
-        entity.setAttribute('rotation', '0 0 0');
-        
-        // Add animation attributes
-        entity.setAttribute('animation-mixer', '');
-        entity.setAttribute('animation', 'property: rotation; to: 0 360 0; dur: 6000; loop: true');
-        
-        // Add click handler
-        entity.addEventListener('click', function() {
-            onModelClick(letter);
-        });
-        
-        marker.appendChild(entity);
-        scene.appendChild(marker);
-        
-        // Add marker detected/lost events
-        marker.addEventListener('markerFound', function() {
-            onMarkerFound(letter);
-        });
-        
-        marker.addEventListener('markerLost', function() {
-            onMarkerLost(letter);
-        });
-        
-        // Track model loading
-        entity.addEventListener('model-loaded', function() {
-            onModelLoaded(letter);
-        });
-        
-        entity.addEventListener('model-error', function() {
-            console.warn(`Model ${letter} failed to load`);
-        });
-    });
-    
-    console.log(`Created ${ALPHABETS.length} markers and models`);
-    updateLoadingStatus('Assets loading...');
-}
-
-// Called when model is loaded
-function onModelLoaded(letter) {
-    assetsLoaded++;
-    const progress = 60 + (assetsLoaded / assetsToLoad) * 40;
-    updateLoadingProgress(Math.min(progress, 99));
-    console.log(`Model ${letter} loaded (${assetsLoaded}/${assetsToLoad})`);
-}
-
-// Setup event listeners
-function setupEventListeners() {
-    const scene = document.querySelector('a-scene');
-    
-    if (scene) {
-        scene.addEventListener('renderstart', function() {
-            console.log('✓ AR rendering started');
-            updateLoadingStatus('Finalizing setup...');
-            updateLoadingProgress(95);
-            
-            // Small delay to ensure everything is ready
-            setTimeout(() => {
-                hideLoader();
-                updateStatus('Ready - Point camera at markers');
-            }, 500);
-        });
     }
+
+    // Show gesture hints
+    showGestureHints();
 }
 
-// Called when marker is detected
-function onMarkerFound(letter) {
-    console.log(`✓ Marker ${letter} detected!`);
-    updateStatus(`Detected Letter: ${letter}`);
-    
-    // Add visual feedback
-    const model = document.getElementById(`model${letter}`);
-    if (model) {
-        console.log(`Showing model for letter ${letter}`);
+// Handle Marker Lost
+function onMarkerLost(letter, marker) {
+    if (STATE.currentLetter === letter) {
+        STATE.currentLetter = null;
+        STATE.markerDetected = false;
     }
+
+    console.log(`📍 Marker Lost: ${letter}`);
+
+    // Update UI
+    updateLetterDisplay(null);
+
+    // Hide gesture hints
+    hideGestureHints();
 }
 
-// Called when marker is lost
-function onMarkerLost(letter) {
-    console.log(`✗ Marker ${letter} lost`);
-}
-
-// Handle model click
-function onModelClick(letter) {
-    console.log(`Clicked on model ${letter}`);
-    playSound(letter);
-    showLetterInfo(letter);
-}
-
-// Play sound for letter (optional)
-function playSound(letter) {
-    console.log(`Playing sound for letter: ${letter}`);
-}
-
-// Show letter information
-function showLetterInfo(letter) {
-    const currentLetter = document.getElementById('current-letter');
-    if (currentLetter) {
-        currentLetter.textContent = `Detected Letter: ${letter}`;
-    }
-    console.log(`Showing info for letter: ${letter}`);
-}
-
-// Update status message
-function updateStatus(message) {
-    const instructions = document.getElementById('instructions');
-    if (instructions) {
-        instructions.textContent = message;
-    }
-    console.log(`Status: ${message}`);
-}
-
-// Update loading status
-function updateLoadingStatus(message) {
-    const statusEl = document.getElementById('loading-status');
-    if (statusEl) {
-        statusEl.textContent = message;
-    }
-    console.log(`Loading: ${message}`);
-}
-
-// Update loading progress
-function updateLoadingProgress(percent) {
-    const progressBar = document.getElementById('loading-progress');
-    if (progressBar) {
-        progressBar.style.width = Math.min(percent, 100) + '%';
-    }
-}
-
-// Hide loader
-function hideLoader() {
-    const loader = document.getElementById('loading-overlay');
-    if (loader) {
-        loader.classList.remove('active');
-        setTimeout(() => {
-            loader.style.display = 'none';
-        }, 500);
-    }
-    console.log('Loader hidden');
-}
-
-// Show loader
-function showLoader() {
-    const loader = document.getElementById('loading-overlay');
-    if (loader) {
-        loader.style.display = 'flex';
-        loader.classList.add('active');
-    }
-}
-
-// Show error overlay
-function showErrorOverlay(show) {
-    const errorOverlay = document.getElementById('error-overlay');
-    if (errorOverlay) {
-        if (show) {
-            errorOverlay.style.display = 'flex';
-            hideLoader();
+// Update Letter Display
+function updateLetterDisplay(letter) {
+    const infoPanelElement = document.querySelector('#current-letter');
+    if (infoPanelElement) {
+        if (letter) {
+            const letterName = CONFIG.markers[letter].name;
+            infoPanelElement.textContent = `Detected: ${letter} - ${letterName}`;
+            infoPanelElement.style.color = '#4CAF50';
         } else {
-            errorOverlay.style.display = 'none';
+            infoPanelElement.textContent = 'Detected Letter: None';
+            infoPanelElement.style.color = '#b0b0b0';
         }
     }
 }
 
-// Show error message
-function showError(message) {
-    console.error('ERROR:', message);
-    const errorMessage = document.getElementById('error-message');
-    if (errorMessage) {
-        errorMessage.textContent = message;
+// Setup Event Listeners
+function setupEventListeners() {
+    // Audio toggle
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'a' || event.key === 'A') {
+            STATE.audioEnabled = !STATE.audioEnabled;
+            console.log(`🔊 Audio: ${STATE.audioEnabled ? 'ON' : 'OFF'}`);
+        }
+        
+        if (event.key === 'g' || event.key === 'G') {
+            STATE.gesturesEnabled = !STATE.gesturesEnabled;
+            console.log(`👆 Gestures: ${STATE.gesturesEnabled ? 'ON' : 'OFF'}`);
+        }
+    });
+
+    // Window resize handling
+    window.addEventListener('resize', () => {
+        adjustCanvasSize();
+    });
+
+    // Orientation change
+    window.addEventListener('orientationchange', () => {
+        adjustCanvasSize();
+    });
+}
+
+// Initialize Audio Visuals
+function initializeAudioVisuals() {
+    console.log('🎵 Audio system initialized');
+    // Future audio visualization features can be added here
+}
+
+// Show Gesture Hints
+function showGestureHints() {
+    if (STATE.gesturesEnabled) {
+        const gestureHint = document.querySelector('.gesture-hint');
+        if (!gestureHint) {
+            const hint = document.createElement('div');
+            hint.className = 'gesture-hint active';
+            hint.textContent = '👆 Pinch to zoom | Drag to rotate';
+            document.body.appendChild(hint);
+
+            // Auto-hide after 3 seconds
+            setTimeout(() => {
+                if (hint.parentNode) {
+                    hint.remove();
+                }
+            }, 3000);
+        }
     }
 }
 
-// Function to reset scene
-function resetScene() {
-    console.log('Resetting AR scene...');
-    const models = document.querySelectorAll('[id^="model"]');
-    models.forEach(model => {
-        model.removeAttribute('animation');
-    });
-    updateStatus('Scene reset - Point camera at markers');
+// Hide Gesture Hints
+function hideGestureHints() {
+    const gestureHints = document.querySelectorAll('.gesture-hint');
+    gestureHints.forEach(hint => hint.remove());
 }
 
-// Export functions for use in HTML
-window.resetScene = resetScene;
-window.MARKER_CONFIG = MARKER_CONFIG;
-window.ALPHABETS = ALPHABETS;
+// Adjust Canvas Size
+function adjustCanvasSize() {
+    const canvas = document.querySelector('canvas');
+    if (canvas) {
+        canvas.style.width = window.innerWidth + 'px';
+        canvas.style.height = window.innerHeight + 'px';
+        console.log(`📐 Canvas resized to ${window.innerWidth}x${window.innerHeight}`);
+    }
+}
 
-console.log('AR Alphabets A-Z Application Initialized');
+// Request Camera Access
+function requestCameraAccess() {
+    const constraints = {
+        video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            aspectRatio: { ideal: 16 / 9 }
+        },
+        audio: false
+    };
 
+    navigator.mediaDevices.getUserMedia(constraints)
+        .then(stream => {
+            console.log('✓ Camera access granted');
+            stream.getTracks().forEach(track => track.stop());
+        })
+        .catch(err => {
+            console.error('❌ Camera Error:', err.name, '-', err.message);
+            console.log('Camera Settings Used:', constraints);
+        });
+}
+
+// Export functions for global access
+window.AR = {
+    toggleAudio: () => {
+        STATE.audioEnabled = !STATE.audioEnabled;
+        console.log(`🔊 Audio: ${STATE.audioEnabled ? 'ON' : 'OFF'}`);
+    },
+    toggleGestures: () => {
+        STATE.gesturesEnabled = !STATE.gesturesEnabled;
+        console.log(`👆 Gestures: ${STATE.gesturesEnabled ? 'ON' : 'OFF'}`);
+    },
+    getCurrentLetter: () => STATE.currentLetter,
+    getState: () => ({ ...STATE }),
+    getConfig: () => CONFIG
+};
+
+// Log initialization complete
+console.log('✅ AR Alphabets Application Ready');
+console.log('Press A to toggle audio');
+console.log('Press G to toggle gestures');
+console.log('Type AR.toggleAudio() or AR.toggleGestures() in console to control');
+
+// Request camera access on load
+window.addEventListener('load', () => {
+    requestCameraAccess();
+});

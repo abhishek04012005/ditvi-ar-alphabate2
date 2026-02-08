@@ -1,104 +1,377 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
+    <script src="https://unpkg.com/aframe-html-shader@1.5.0/dist/aframe-html-shader.min.js"></script>
+    <script src="https://raw.githack.com/fcor/arjs-gestures/master/dist/gestures.js"></script>
+
+    <script>
+        AFRAME.registerSystem('loading-screen', {
+            init: function () {
+                this.loadingScreen = document.querySelector('#loading-screen');
+                this.progressText = document.querySelector('#loading-progress');
+                this.loadedAssets = 0;
+                this.totalModels = document.querySelectorAll('a-entity[gltf-model]').length;
+                this.totalSounds = document.querySelectorAll('a-sound').length;
+                this.totalAssets = this.totalModels + this.totalSounds;
+                this.screenHidden = false;
+
+                console.log(`Total assets to load: ${this.totalAssets} (${this.totalModels} models + ${this.totalSounds} sounds)`);
+
+                // Fallback timeout - hide loading screen after 8 seconds regardless
+                setTimeout(() => {
+                    if (!this.screenHidden) {
+                        console.warn('Asset loading timeout - forcing loading screen to hide');
+                        this.hideLoadingScreen();
+                    }
+                }, 8000);
+
+                // Track model loading
+                const modelEntities = document.querySelectorAll('a-entity[gltf-model]');
+                modelEntities.forEach(entity => {
+                    entity.addEventListener('model-loaded', () => this.assetLoaded('model'));
+                    entity.addEventListener('model-error', (e) => {
+                        console.error('Model failed to load:', e.detail.src);
+                        this.handleAssetError('model');
+                    });
+                });
+
+                // Track audio loading
+                const soundEntities = document.querySelectorAll('a-sound');
+                soundEntities.forEach(sound => {
+                    sound.addEventListener('sound-loaded', () => this.assetLoaded('sound'));
+                    sound.addEventListener('sound-error', (e) => {
+                        console.error('Sound failed to load:', e.detail.src);
+                        this.handleAssetError('sound');
+                    });
+                });
+            },
+
+            assetLoaded: function (type) {
+                this.loadedAssets++;
+                const progress = Math.round((this.loadedAssets / this.totalAssets) * 100);
+
+                if (this.progressText) {
+                    this.progressText.textContent = `${progress}%`;
+                }
+                console.log(`Loaded ${type}: ${this.loadedAssets}/${this.totalAssets} (${progress}%)`);
+
+                if (this.loadedAssets >= this.totalAssets && !this.screenHidden) {
+                    this.hideLoadingScreen();
+                }
+            },
+
+            handleAssetError: function (type) {
+                console.error(`Failed to load ${type}. Updating total assets count.`);
+                this.totalAssets--;
+
+                if (this.loadedAssets >= this.totalAssets && !this.screenHidden) {
+                    this.hideLoadingScreen();
+                }
+            },
+
+            hideLoadingScreen: function () {
+                if (this.loadingScreen && this.loadingScreen.style.display !== 'none') {
+                    console.log('All resources loaded, hiding loading screen');
+                    this.loadingScreen.style.display = 'none';
+                    this.screenHidden = true;
+
+                    const logo = document.querySelector('#logo');
+                    if (logo) {
+                        logo.style.display = 'block';
+                    }
+                }
+            }
+        });
+    </script>
+
+    <script>
+        AFRAME.registerComponent('marker-sound', {
+            init: function () {
+                this.marker = this.el;
+                this.audio = this.el.querySelector('a-sound');
+
+                this.marker.addEventListener('markerFound', () => {
+                    if (this.audio && this.audio.components.sound) {
+                        this.audio.components.sound.playSound();
+                    }
+                });
+
+                this.marker.addEventListener('markerLost', () => {
+                    if (this.audio && this.audio.components.sound) {
+                        this.audio.components.sound.pauseSound();
+                    }
+                });
+            }
+        });
+    </script>
+
+    <script>
+        AFRAME.registerComponent('smooth', {
+            schema: {
+                smoothCount: { type: 'number', default: 10 },
+                smoothTolerance: { type: 'number', default: 0.01 },
+                smoothThreshold: { type: 'number', default: 2 },
+            },
+
+            init: function () {
+                this.previousPosition = new THREE.Vector3();
+                this.previousRotation = new THREE.Euler();
+                this.previousVisible = false;
+                this.positions = [];
+                this.rotations = [];
+            },
+
+            tick: function () {
+                const marker = this.el;
+                const object3D = marker.object3D;
+                const { smoothCount, smoothTolerance, smoothThreshold } = this.data;
+
+                if (!object3D.visible && this.previousVisible) {
+                    object3D.position.copy(this.previousPosition);
+                    object3D.rotation.copy(this.previousRotation);
+                } else if (object3D.visible) {
+                    this.positions.push(object3D.position.clone());
+                    if (this.positions.length > smoothCount) {
+                        this.positions.shift();
+                    }
+
+                    this.rotations.push(new THREE.Euler().copy(object3D.rotation));
+                    if (this.rotations.length > smoothCount) {
+                        this.rotations.shift();
+                    }
+
+                    if (this.positions.length >= smoothCount) {
+                        const smoothedPosition = new THREE.Vector3();
+                        const smoothedRotation = new THREE.Euler();
+
+                        this.positions.forEach(pos => smoothedPosition.add(pos));
+                        smoothedPosition.divideScalar(this.positions.length);
+
+                        this.rotations.forEach(rot => {
+                            smoothedRotation.x += rot.x;
+                            smoothedRotation.y += rot.y;
+                            smoothedRotation.z += rot.z;
+                        });
+                        smoothedRotation.x /= this.rotations.length;
+                        smoothedRotation.y /= this.rotations.length;
+                        smoothedRotation.z /= this.rotations.length;
+
+                        if (smoothedPosition.distanceTo(object3D.position) < smoothThreshold) {
+                            object3D.position.lerp(smoothedPosition, smoothTolerance);
+                            object3D.rotation.set(
+                                THREE.MathUtils.lerp(object3D.rotation.x, smoothedRotation.x, smoothTolerance),
+                                THREE.MathUtils.lerp(object3D.rotation.y, smoothedRotation.y, smoothTolerance),
+                                THREE.MathUtils.lerp(object3D.rotation.z, smoothedRotation.z, smoothTolerance)
+                            );
+                        }
+                    }
+
+                    this.previousPosition.copy(object3D.position);
+                    this.previousRotation.copy(object3D.rotation);
+                }
+                this.previousVisible = object3D.visible;
+            }
+        });
+    </script>
+
+    <script>
+        AFRAME.registerComponent('play-all-model-animations', {
+            init: function () {
+                this.model = null;
+                this.mixer = null;
+
+                var model = this.el.getObject3D('mesh');
+                if (model) {
+                    this.load(model);
+                } else {
+                    this.el.addEventListener('model-loaded', e => {
+                        this.load(e.detail.model);
+                    });
+                }
+            },
+
+            load: function (model) {
+                this.model = model;
+                this.mixer = new THREE.AnimationMixer(model);
+
+                if (this.model.animations.length) {
+                    this.model.animations.forEach(animation => {
+                        let action = this.mixer.clipAction(animation);
+                        action.play();
+                    });
+                }
+            },
+
+            tick: function (t, dt) {
+                if (this.mixer) {
+                    this.mixer.update(dt / 1000);
+                }
+            }
+        });
+    </script>
+
+    <script>
+        AFRAME.registerComponent('gesture-handler', {
+            schema: {
+                enabled: { default: true },
+                rotationFactor: { default: 5 },
+                minScale: { default: 0.3 },
+                maxScale: { default: 8 },
+            },
+
+            init: function () {
+                this.handleScale = this.handleScale.bind(this);
+                this.handleRotation = this.handleRotation.bind(this);
+
+                this.isVisible = false;
+                this.initialScale = this.el.object3D.scale.clone();
+                this.scaleFactor = 1;
+
+                this.el.sceneEl.addEventListener("markerFound", (e) => {
+                    this.isVisible = true;
+                });
+
+                this.el.sceneEl.addEventListener("markerLost", (e) => {
+                    this.isVisible = false;
+                });
+            },
+
+            handleRotation: function (event) {
+                if (this.isVisible) {
+                    this.el.object3D.rotation.y +=
+                        event.detail.positionChange.x * this.data.rotationFactor;
+                    this.el.object3D.rotation.x +=
+                        event.detail.positionChange.y * this.data.rotationFactor;
+                }
+            },
+
+            handleScale: function (event) {
+                if (this.isVisible) {
+                    this.scaleFactor *=
+                        1 + event.detail.spreadChange / event.detail.startSpread;
+
+                    this.scaleFactor = Math.min(
+                        Math.max(this.scaleFactor, this.data.minScale),
+                        this.data.maxScale
+                    );
+
+                    this.el.object3D.scale.x = this.scaleFactor * this.initialScale.x;
+                    this.el.object3D.scale.y = this.scaleFactor * this.initialScale.y;
+                    this.el.object3D.scale.z = this.scaleFactor * this.initialScale.z;
+                }
+            },
+        });
+    </script>
+
+    <style>
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #4CAF50;
+            border-bottom-color: transparent;
+            border-radius: 50%;
+            animation: rotation 1s linear infinite;
+        }
+
+        .loading-text {
+            color: white;
+            margin-top: 20px;
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+        }
+
+        #loading-progress {
+            font-weight: bold;
+            margin-left: 5px;
+            color: #4CAF50;
+        }
+
+        @keyframes rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #logo {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            z-index: 1000;
+            max-width: 120px;
+            max-height: 80px;
+            display: none;
+        }
+
+        #logo img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+
     <title>AR Alphabets A-Z</title>
-    <link rel="stylesheet" href="css/style.css">
-    <!-- A-Frame library (load first) -->
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <!-- AR.js library -->
-    <script src="https://cdn.jsdelivr.net/npm/ar.js@3.4.5/aframe/aframe-ar.js"></script>
 </head>
+
 <body>
-    <div id="loading-overlay" class="loading-overlay active">
-        <div class="loading-container">
-            <div class="loading-spinner"></div>
-            <h2>Loading AR Experience</h2>
-            <p id="loading-status">Initializing camera...</p>
-            <div class="loading-bar">
-                <div id="loading-progress" class="loading-progress"></div>
-            </div>
-        </div>
+
+    <div id="logo">
+        <img src="./logo.png" alt="Logo">
     </div>
 
-    <div id="error-overlay" class="error-overlay" style="display: none;">
-        <div class="error-container">
-            <h2>⚠️ Camera Error</h2>
-            <p id="error-message"></p>
-            <button onclick="location.reload()">Retry</button>
-        </div>
+    <div id="loading-screen">
+        <div class="loader"></div>
+        <div class="loading-text">Loading AR Resources... <span id="loading-progress">0%</span></div>
     </div>
 
-    <div id="ar-container">
-        <a-scene 
-            embedded 
-            arjs="sourceType: webcam; 
-                   detectionMode: mono; 
-                   matrixCodeType: 3x3;
-                   debugUIEnabled: false;
-                   trackingMethod: best;"
-            id="ar-scene">
-            
-            <!-- Camera with proper configuration -->
-            <a-camera position="0 0 0" 
-                      look-controls="enabled: true"
-                      wasd-controls-enabled="false">
-            </a-camera>
-            
-            <!-- Markers for each alphabet A-Z -->
-            <!-- Using pattern-based markers -->
-            <a-marker id="markerA" type="pattern" url="./assets/markers/ar-marker-1770559668997.patt">
-                <a-entity 
-                    id="modelA"
-                    gltf-model="url(./assets/3dmodels/apple2.0.glb)"
-                    scale="1 1 1"
-                    position="0 0 0"
-                    rotation="0 0 0"
-                    animation="property: rotation; to: 0 360 0; dur: 6000; loop: true;">
-                </a-entity>
-            </a-marker>
+    <a-scene embedded loading-screen
+        arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false; patternRatio:0.80" 
+        gesture-detector
+        renderer="antialias: true; colorManagement: true; physicallyCorrectLights: true; alpha: true;">
+        
+        <a-light type="ambient" intensity="4"></a-light>
+        <a-light type="directional" position="1 1 1" intensity="4" color="#FFF"></a-light>
 
-            <a-marker id="markerB" type="pattern" url="assets/markers/pattern-B.patt">
-                <a-entity 
-                    id="modelB"
-                    gltf-model="url(assets/3dmodels/B.gltf)"
-                    scale="1 1 1"
-                    position="0 0 0"
-                    rotation="0 0 0"
-                    animation="property: rotation; to: 0 360 0; dur: 6000; loop: true;">
-                </a-entity>
-            </a-marker>
+        <!-- A: Apple -->
+        <a-marker id="apple-marker" marker-sound persistent-marker type="pattern"
+            smooth="smoothCount: 10; smoothTolerance: 0.01; smoothThreshold: 2"
+            url="./assets/markers/ar-marker-1770559668997.patt">
+            <a-entity position="0 0 0" scale="0.03 0.03 0.03" rotation="-90 0 0" animation-mixer
+                class="clickable" gesture-handler="minScale: 0.05; maxScale: 10; rotationFactor: 5"
+                gltf-model="./assets/3dmodels/apple2.0.glb">
+            </a-entity>
+        </a-marker>
 
-            <a-marker id="markerC" type="pattern" url="assets/markers/pattern-C.patt">
-                <a-entity 
-                    id="modelC"
-                    gltf-model="url(assets/3dmodels/C.gltf)"
-                    scale="1 1 1"
-                    position="0 0 0"
-                    rotation="0 0 0"
-                    animation="property: rotation; to: 0 360 0; dur: 6000; loop: true;">
-                </a-entity>
-            </a-marker>
-            
-        </a-scene>
-    </div>
+        </a-marker>
 
-    <!-- Controls and Info Panel -->
-    <div id="info-panel">
-        <h1>AR Alphabets A-Z</h1>
-        <p id="current-letter">Detected Letter: None</p>
-        <p id="instructions">Point your camera at the markers to see the 3D alphabet models</p>
-    </div>
+        <a-entity camera></a-entity>
+    </a-scene>
 
-    <!-- Marker Information -->
-    <div id="marker-info">
-        <h3>Marker Type: Pattern-Based Markers</h3>
-        <p>Using NFT-compatible pattern markers (.patt files)</p>
-    </div>
-
-    <script src="js/app.js"></script>
 </body>
+
 </html>
